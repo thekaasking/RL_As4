@@ -3,33 +3,113 @@ import numpy as np
 import scipy as sp
 import gymnasium as gym
 from Helper import LearningCurvePlot, smooth
-#
-# TODO
-# N_actrions fixen > dividebyzerowarning in select_action()
-# Fix state indexing in select_action > error l17 IndexError: arrays used as indices must be of integer (or boolean) type
 
 
 class QLearningAgent(object):
-
-    def __init__(self, n_actions, n_states, epsilon):
-        self.n_actions = n_actions
-        self.n_states = n_states
+    def __init__(self, state_space, action_space, bin_size=20, epsilon=0.2):
         self.epsilon = epsilon
-        self.Q = np.zeros((n_states, n_actions))
-        
+        self.bins = [
+            np.linspace(-4.8, 4.8, bin_size),
+            np.linspace(-4, 4, bin_size),
+            np.linspace(-0.418, 0.418, bin_size),
+            np.linspace(-4, 4, bin_size)
+        ]
+        self.state_space = state_space
+        self.action_space = action_space
+        self.Q = np.random.uniform(low=-1, high=1, size=([bin_size] * state_space + [action_space]))
+
+    def Discrete(self, state):
+        index = []
+        for i in range(len(state)):
+            index.append(np.digitize(state[i], self.bins[i]) - 1)
+        return tuple(index)
+
     def select_action(self, state):
-        if np.random.random() < 1 - self.epsilon + self.epsilon/self.n_actions:
-            return np.argmax(self.Q[state,:])
+        discrete_state = self.Discrete(state)
+        if np.random.random() < 1 - self.epsilon + self.epsilon / self.action_space:
+            return np.argmax(self.Q[discrete_state, :])
         else:
-            actions = [0,1,2,3]
+            actions = list(range(self.action_space))
             action = np.random.choice(actions, 1)
-            maxaction = np.argmax(self.Q[state,:])
-            while action==maxaction:
+            max_action = np.argmax(self.Q[discrete_state, :])
+            while action == max_action:
                 action = np.random.choice(actions, 1)
             return action
+
+    def update(self, state, action, reward, alpha, new_state):
+        discrete_state = self.Discrete(state)
+        discrete_new_state = self.Discrete(new_state)
+        self.Q[discrete_state][action] = self.Q[discrete_state][action] + alpha * (
+                reward + np.max(self.Q[discrete_new_state, :]) - self.Q[discrete_state][action])
+
+
+def run_repetitions(n_episodes, alpha, epsilon):
+    env = gym.make("CartPole-v1", render_mode="rgb_array")
+    rewards = np.zeros(n_episodes)
+    done = False
+    dim_x = len(env.observation_space.low)
+    dim_y = len(env.observation_space.high)
+    state_size = dim_x * dim_y
+    y = np.zeros(state_size)
+    n_actions = env.action_space.n
+    print(n_actions)
+    print(state_size)
+    pi = QLearningAgent(state_space=state_size, action_space=n_actions, epsilon=epsilon)
+
+    for i in range(n_episodes):
+        env.reset()
+        while not done:
+            state = env.state
+            a = pi.select_action(state)  # select action
+            new_state, reward, done, _ = env.step(a)  # sample reward
+            y[state] = np.argmax(pi.Q[state, :])
+            pi.update(state, a, reward, alpha, new_state)  # update policy
+            rewards[i] += reward
+    return y, rewards
+
+
+
+# class QLearningAgent(object):
+
+#     #def __init__(self, n_actions, n_states, epsilon):
+#         #self.n_actions = n_actions
+#         #self.n_states = n_states
+#         #self.epsilon = epsilon
+#         #self.Q = np.zeros((n_states, n_actions))
+#     def Discrete(self, state, bins):
+#         index = []
+#         for i in range(len(state)): index.append(np.digitize(state[i],bins[i]) - 1)
         
-    def update(self, state, action, reward, alpha, newstate):
-        self.Q[state][action] = self.Q[state][action] + alpha * (reward+np.max(self.Q[newstate,:])-self.Q[state][action])
+#         self.Discrete = tuple(index)
+#         return tuple(index)
+
+#     def __init__(self, state_space,action_space,bin_size = 30):
+#         """
+        
+#         """
+#         self.bins = [np.linspace(-4.8,4.8,bin_size),
+#                 np.linspace(-4,4,bin_size),
+#                 np.linspace(-0.418,0.418,bin_size),
+#                 np.linspace(-4,4,bin_size)]
+    
+#         self.Q = np.random.uniform(low=-1,high=1,size=([bin_size] * state_space + [action_space]))
+#         return Q, bins
+            
+#     def select_action(self, state):
+#         print(f"TYPE STATE {type(state)}")
+#         print(state)
+#         if np.random.random() < 1 - self.epsilon + self.epsilon/self.n_actions:
+#             return np.argmax(self.Q[state,:])
+#         else:
+#             actions = [0,1,2,3]
+#             action = np.random.choice(actions, 1)
+#             maxaction = np.argmax(self.Q[state,:])
+#             while action==maxaction:
+#                 action = np.random.choice(actions, 1)
+#             return action
+        
+#     def update(self, state, action, reward, alpha, newstate):
+#         self.Q[state][action] = self.Q[state][action] + alpha * (reward+np.max(self.Q[newstate,:])-self.Q[state][action])
 
 
 class SARSAAgent(object):
@@ -55,37 +135,40 @@ class SARSAAgent(object):
         self.Q[state][action] = self.Q[state][action] + alpha*(reward + (self.Q[state_1][action_1])-self.Q[state][action])
 
 
-def cur_state(env):
-    # do ando an action])
-    # empty step
-    new_state, b, c, d, e = env.step(0)
-    return new_state
+# def cur_state(env):
+#     # do ando an action])
+#     # empty step
+#     new_state, b, c, d, e = env.step(0)
+#     return new_state
 
 
-def run_repetitions(n_episodes, alpha, epsilon):
-    env = gym.make("CartPole-v1", render_mode="rgb_array")
-    rewards = np.zeros(n_episodes)
-    done = False
-    dim_x = len(env.observation_space.low)
-    dim_y = len(env.observation_space.high)
-    state_size = dim_x*dim_y
-    y = np.zeros(state_size)
+# def run_repetitions(n_episodes, alpha, epsilon):
+#     env = gym.make("CartPole-v1", render_mode="rgb_array")
+
+#     rewards = np.zeros(n_episodes)
+#     done = False
+#     dim_x = len(env.observation_space.low)
+#     dim_y = len(env.observation_space.high)
+#     #print(env.observation_space)
+#     state_size = dim_x*dim_y
+#     y = np.zeros(state_size)
     
-    n_actions = env.action_space.sample()
-    #print(state_size)
-    #print(n_actions)
-    pi = QLearningAgent(n_actions=n_actions, epsilon = epsilon, n_states = state_size)
-    for i in range(n_episodes):
-        env.reset()
-        while not done:
-            state = env.state
-            a = pi.select_action(state) # select action
-            new_state, reward, done = env.step(a) # sample reward
-            y[state] = np.argmax(pi.Q[state,:])
-           # pi.update(state, a, reward, alpha, cur_state(env)) # update policy
-            pi.update(state, a, reward, alpha, new_state) # update policy
-            rewards[i] += reward
-    return y, rewards
+#     n_actions = env.observation_space
+    
+#     pi = QLearningAgent(n_actions=n_actions, epsilon = epsilon, n_states = state_size)
+#     for i in range(n_episodes):
+#         env.reset()
+#         while not done:
+#            # print(env.action_space)
+#             state = env.state
+
+#             a = pi.select_action(state) # select action
+#             new_state, reward, done = env.step(a) # sample reward
+#             y[state] = np.argmax(pi.Q[state,:])
+#            # pi.update(state, a, reward, alpha, cur_state(env)) # update policy
+#             pi.update(state, a, reward, alpha, new_state) # update policy
+#             rewards[i] += reward
+#     return y, rewards
 
 
 def run_repetitions_SARSA(n_episodes, alpha, epsilon):
@@ -147,10 +230,12 @@ if __name__ == '__main__':
     alpha = 0.1
     alpha_values = [0.01, 0.1, 0.5, 0.9]
 
-    experiment(n_episodes, n_rep, smoothing_window, epsilon, alpha_values)
+   # experiment(n_episodes, n_rep, smoothing_window, epsilon, alpha_values)
 
     np.set_printoptions(threshold=np.inf)
     
-   # array_y, rewards = run_repetitions(n_episodes, alpha, epsilon)
+    array_y, rewards = run_repetitions(n_episodes, alpha, epsilon)
+    print(array_y)
+    print(rewards)
     
    # array_y, rewards = run_repetitions_SARSA(n_episodes, alpha, epsilon)
