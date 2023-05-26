@@ -16,10 +16,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
 from Helper import LearningCurvePlot, smooth
-
-# Constants
-GAMMA = 0.9
 
 class PolicyNetwork(nn.Module):
     """
@@ -101,17 +99,20 @@ def update_policy(policy_network, rewards, log_probs, gamma):
 
 
 
-def experiment(num_episodes, max_steps, gamma):
+def experiment(num_episodes, max_steps, gamma, learning_rate):
     """
     Main function to train the policy network using the REINFORCE algorithm.
-    Creates figures, and saves them. Does not use the Helper functions as it was
-    easier this way.
+    Returns the lists full of data about the run, instead of creating the figure here.
+    The lists are used to create the plots in the main function.
+
     :param num_episodes: episodes our agent runs
     :param max_steps: maximum steps our agent does
-    returns nothing
+    :return avg_numsteps: list of the average number of steps the agent took 
+    :return numsteps: list of all aggregated steps
+    :return all_rewards: list of all aggregated rewards
     """
     env = gym.make("CartPole-v1", render_mode="rgb_array")
-    policy_net = PolicyNetwork(env.observation_space.shape[0], env.action_space.n, 128)
+    policy_net = PolicyNetwork(env.observation_space.shape[0], env.action_space.n, 128, learning_rate=learning_rate)
     
 
     numsteps = []
@@ -141,32 +142,44 @@ def experiment(num_episodes, max_steps, gamma):
             
             state = new_state
     
-    fig, ax = plt.subplots()  # Create a new figure and axes object
-    ax.set_title(f"REINFORCE Steps Plot with Gamma={gamma}")
-    ax.set_ylabel('Steps')
-    ax.set_xlabel('Episode')
-    ax.plot(numsteps, label='Number of steps')
-    ax.plot(avg_numsteps, label='Average number of steps') 
-    ax.legend()
-    plt.savefig(f"REINFORCE_{num_episodes}_{max_steps}_{gamma}.png")
-    plt.close(fig)  # Close the figure to free up memory
-    
+    return numsteps, avg_numsteps, all_rewards
 
 
 def main():
     """
     Function that calls the experiment function, if wanted with different parameters.
     This is used to establish a useful set of parameters.
-    We loop over different values of Gamma and the maximum steps
+    We loop over different values of Gamma and the maximum steps.
+
+    gamma_values = [0.6, 0.7, 0.8, 0.9, 1.0]
+    max_steps_values = [100, 500, 1000, 5000, 10000] >> 100 is really too small.
+    max_episode_num_values = [1000, 2000]
+
     """
     gamma_values = [0.6, 0.7, 0.8, 0.9, 1.0]
-    max_steps_values = [100, 500, 1000, 5000, 10000]
-    max_episode_num_values = [1000, 2000, 5000]
+    #gamma_values = [0.9]
+    #max_steps_values = [500, 1000, 5000, 10000]
+    max_steps_values = [5000, 10000]
+    max_episode_num_values = [1000]#[1000, 2000]
+    learning_rates = [3e-4]
+    #learning_rates = [3e-4, 3e-3, 3e-2]
 
+   # ax.plot(numsteps, label='Number of steps')
     for steps in max_steps_values:
         for episodes in max_episode_num_values:
-            for gamma in gamma_values:
-                experiment(episodes, steps, gamma)
+            fig, ax = plt.subplots()  # Create a new figure and axes object
+            ax.set_title(f"REINFORCE Average Steps Plot with {steps} maximum steps")
+            ax.set_ylabel('Steps')
+            ax.set_xlabel('Episode')
+            # Try all gamma values
+            for learning_rate in learning_rates:
+                for gamma in gamma_values:
+                    numsteps, avg_numsteps, all_rewards =  experiment(episodes, steps, gamma, learning_rate)
+                    smoothed = savgol_filter(avg_numsteps,30,1)
+                    ax.plot(smoothed, label=f'Average steps with gamma = {gamma}') 
+            ax.legend()
+            plt.savefig(f"REINFORCE_{episodes}_{steps}.png")
+            plt.close(fig)  # Close the figure to free up memory
     # max_episode_num = 300
     # max_steps = 10000
     # gamma = 0.9
