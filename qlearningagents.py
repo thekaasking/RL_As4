@@ -48,12 +48,11 @@ class QLearningAgent(object):
             return np.argmax(self.Q[discrete_state, :])
         else:
             actions = list(range(self.action_space))
-            action = np.random.choice(actions)  # Remove '1' from np.random.choice
+            action = np.random.choice(actions, 1)
             max_action = np.argmax(self.Q[discrete_state, :])
             while action == max_action:
-                action = np.random.choice(actions)  # Remove '1' from np.random.choice
+                action = np.random.choice(actions, 1)
             return action
-
 
     def update(self, state, action, reward, alpha, new_state):
         """
